@@ -1,0 +1,21 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: #14151A;
+  --paper: #F5F3EE;
+  --efficiency: #E8A33D;
+  --wellbeing: #5FA8A0;
+  --consequence: #7C6FE0;
+}
+
+body {
+  background-color: var(--ink);
+  font-family: 'Inter', sans-serif;
+}
+
+.font-display { font-family: 'Fraunces', serif; }
+.font-mono-label { font-family: 'IBM Plex Mono', monospace; }
