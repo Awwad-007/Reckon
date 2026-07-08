@@ -3,6 +3,7 @@ import { useState } from 'react';
 interface Props {
   isOpen: boolean;
   overriddenPoint: string;
+  overriddenTaskId: string;
   relevantAgentKey: string;
   onSubmitReason: (reason: string) => void;
   onClose: () => void;

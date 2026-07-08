@@ -31,44 +31,82 @@ A single LLM call can simulate an opinion. It can't produce genuine structured d
 | Layer | Choice |
 |---|---|
 | Frontend | React 18 + Vite + Tailwind CSS |
-| Orchestration | Custom lightweight orchestrator (`src/agents/orchestrator.js`) |
-| LLM backend | Swappable — direct Anthropic API pre-event, OpenSwarm on-site (see [Architecture](#architecture)) |
+| Orchestration | Custom lightweight orchestrator (`src/agents/orchestrator.ts`) |
+| LLM backend | Swappable — Groq API (OpenAI-compatible) pre-event, OpenSwarm on-site (see [Architecture](#architecture)) |
 | Voice | Native Web Speech API (`SpeechRecognition` + `SpeechSynthesis`) — no external voice service |
 | State | In-memory React state only — no database, no persistence |
 
-## Architecture
+## Layer Architecture
+
+```
+Reasoning Layer
+---------------
+Input:
+    User dilemma
+
+Output:
+    FinalDecision
+
+Knows:
+    Efficiency Agent, Wellbeing Agent, Consequence Agent, Synthesizer, Enforcer, Override flow
+
+Never knows:
+    Automation, Notifications, Calendar, Timeline, Personalization
+
+
+Assistant Layer
+---------------
+Input:
+    FinalDecision
+
+Output:
+    Executed plan
+
+Knows:
+    Timeline, Notifications, Personalization, Scheduling
+
+Never knows:
+    Efficiency Agent, Wellbeing Agent, Synthesizer, Enforcer, Override flow, or that any of them exist
+```
+
+The Reasoning Layer is not "the Synthesizer." The Synthesizer is one participant inside the Reasoning Layer, alongside the three position agents and the Enforcer. The Reasoning Layer as a whole is responsible for resolving all of that internal activity into one `FinalDecision`. The Assistant only ever sees the output of that resolution.
+
+### API Boundary
 
 The entire app talks to exactly one function for all LLM calls:
 
 ```javascript
-// src/agents/apiClient.js
-export async function callAgent(systemPrompt, userMessage) {
-  // ...
-}
+// src/agents/apiClient.ts
+export async function callAgent(systemPrompt: string, userMessage: string): Promise<string> { }
 ```
 
 Nothing else in the codebase calls an API directly. This means the backend powering the agents can be swapped — from a direct API call to the OpenSwarm platform, for instance — by editing the inside of this one function, with zero changes required anywhere else in the app.
+
+### Data Flow
 
 ```
 User Input (text or voice)
         │
         ▼
- Coordinator — structures the dilemma + task list
+ Reasoning Layer
+    ├── Efficiency Agent ──┐
+    ├── Wellbeing Agent ───┼──► (parallel calls)
+    └── Consequence Agent ─┘
         │
-        ├──► Efficiency Agent ──┐
-        ├──► Wellbeing Agent ───┼──► (parallel calls)
-        └──► Consequence Agent ─┘
+    Synthesizer — verdict + rejected reasoning + rewritten task list
         │
-        ▼
- Synthesizer — verdict + explicit rejected reasoning + rewritten task list
-        │
-        ▼
- UI: agent cards → verdict card → task list diff
+    (on override attempt)
+    Enforcer — pushback or concession
         │
         ▼
- (on override attempt)
+   FinalDecision { decision, taskList, confidence, rationale }
+        │
         ▼
- Enforcer — pushback using seeded behavioral history, or graceful concession
+ Assistant Layer
+    ├── Timeline builder
+    ├── Browser notification
+    ├── .ics calendar export
+    └── Personalization (override-pattern tracking)
 ```
 
 ## Project Structure
@@ -76,18 +114,24 @@ User Input (text or voice)
 ```
 src/
   components/
-    DilemmaInput.jsx     — text/voice input for the daily dilemma
-    AgentCard.jsx         — renders one agent's position
-    VerdictCard.jsx        — renders the synthesized verdict + visible rejected options
-    TaskListDiff.jsx       — before/after view of the task list
-    OverrideModal.jsx      — override flow + Enforcer pushback UI
+    DilemmaInput.tsx     — text/voice input for the daily dilemma
+    AgentCard.tsx         — renders one agent's position
+    VerdictCard.tsx        — renders the synthesized verdict + visible rejected options
+    TaskListDiff.tsx       — before/after view of the task list
+    OverrideModal.tsx      — override flow + Enforcer pushback UI
+    AssistantPanel.tsx     — execution layer: timeline, notifications, .ics export
   agents/
-    apiClient.js          — the ONLY file that calls an LLM API
-    prompts.js            — system prompts for all 5 agents
-    orchestrator.js        — runSwarm() and runEnforcer() pipeline logic
-    fallbackData.js         — seed tasks, seed behavioral history, hardcoded fallback verdict
-  App.jsx
-  main.jsx
+    apiClient.ts          — the ONLY file that calls an LLM API
+    prompts.ts            — system prompts for all 5 agents
+    orchestrator.ts       — runSwarm() and runEnforcer() pipeline logic
+    finalDecision.ts      — FinalDecision type and factory (output contract for Assistant)
+    reasoningTrace.ts     — debug/logging object (Assistant never imports this)
+    fallbackData.ts       — seed tasks, seed behavioral history, hardcoded fallback verdict
+  assistant/
+    automation.ts        — buildTimeline, generateReminder, fireBrowserNotification, generateICS, downloadICS
+    personalization.ts   — override tracking, session-based personalization notes
+  App.tsx
+  main.tsx
 ```
 
 ## Running Locally
@@ -101,7 +145,7 @@ No environment variables or API keys need to be configured manually in the local
 
 ## Reliability & Fallback Behavior
 
-If the LLM backend fails or returns malformed output, the app does not crash or show a blank screen — it falls back to a hardcoded verdict (`FALLBACK_VERDICT` in `fallbackData.js`) so the product remains demoable even under network or API instability.
+If the LLM backend fails or returns malformed output, the app does not crash or show a blank screen — it falls back to a hardcoded verdict (`FALLBACK_VERDICT` in `fallbackData.ts`) so the product remains demoable even under network or API instability.
 
 ## Known Scope Boundaries
 

@@ -1,34 +1,63 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import DilemmaInput from './components/DilemmaInput';
 import AgentCard from './components/AgentCard';
 import VerdictCard from './components/VerdictCard';
 import TaskListDiff from './components/TaskListDiff';
 import OverrideModal from './components/OverrideModal';
 import AssistantPanel from './components/AssistantPanel';
-import { SEED_TASKS } from './agents/fallbackData';
+import { SEED_TASKS, FALLBACK_VERDICT } from './agents/fallbackData';
 import { runSwarm, runEnforcer, type SwarmResult } from './agents/orchestrator';
+import { buildFinalDecision, type FinalDecision } from './agents/finalDecision';
+import { buildReasoningTrace } from './agents/reasoningTrace';
 import type { Task } from './agents/fallbackData';
 import { recordOverrideOutcome } from './assistant/personalization';
 
 type OverrideState = {
   point: string;
+  taskId: string;
   agentKey: 'efficiency' | 'wellbeing' | 'consequence';
 };
 
 export default function App() {
   const [taskList] = useState<Task[]>(SEED_TASKS);
   const [swarmResult, setSwarmResult] = useState<SwarmResult | null>(null);
+  const [finalDecision, setFinalDecision] = useState<FinalDecision | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [overrideModal, setOverrideModal] = useState<OverrideState | null>(null);
   const [enforcerResponse, setEnforcerResponse] = useState<string | null>(null);
   const [enforcerLoading, setEnforcerLoading] = useState(false);
+  const swarmResultRef = useRef<SwarmResult | null>(null);
+
+  const buildDecision = (swarm: SwarmResult, overriddenTaskId?: string): FinalDecision => {
+    const rationale = swarm.verdict.rejectedOptions.map(r => r.reason).join(' ');
+    const confidence = swarm.verdict.rejectedOptions.length <= 1 ? 0.85 : 0.6;
+    let taskList = swarm.verdict.updatedTaskList;
+    if (overriddenTaskId) {
+      taskList = taskList.map(task =>
+        task.id === overriddenTaskId ? { ...task, status: 'pending' as const } : task
+      );
+    }
+    return buildFinalDecision({
+      decision: swarm.verdict.chosenOption,
+      taskList,
+      confidence,
+      rationale,
+    });
+  };
 
   const handleSubmit = useCallback(async (text: string) => {
     setIsLoading(true);
     setSwarmResult(null);
+    setFinalDecision(null);
     try {
       const result = await runSwarm(text, taskList);
+      swarmResultRef.current = result;
       setSwarmResult(result);
+      const fd = buildDecision(result);
+      setFinalDecision(fd);
+      const isFallback = result.verdict === FALLBACK_VERDICT;
+      const trace = buildReasoningTrace(result, false, isFallback ? 'fallback' : 'synthesizer');
+      console.log('[ReasoningTrace]', trace);
     } catch (err) {
       console.error('Swarm failed:', err);
     } finally {
@@ -38,7 +67,7 @@ export default function App() {
 
   const handleOverrideClick = useCallback(() => {
     if (!swarmResult) return;
-    setOverrideModal({ point: swarmResult.verdict.chosenOption, agentKey: 'wellbeing' });
+    setOverrideModal({ point: swarmResult.verdict.chosenOption, taskId: '', agentKey: 'wellbeing' });
     setEnforcerResponse(null);
   }, [swarmResult]);
 
@@ -57,8 +86,35 @@ export default function App() {
   }, [overrideModal]);
 
   const handleOverrideOutcome = useCallback((outcome: 'conceded' | 'overrode_anyway') => {
-    if (!overrideModal) return;
+    if (!overrideModal || !swarmResultRef.current) return;
     recordOverrideOutcome({ relevantAgentKey: overrideModal.agentKey, outcome });
+
+    const swarm = swarmResultRef.current;
+    let finalTaskList = swarm.verdict.updatedTaskList;
+    let rationale: string;
+
+    if (outcome === 'overrode_anyway' && overrideModal.taskId) {
+      finalTaskList = finalTaskList.map(task =>
+        task.id === overrideModal.taskId ? { ...task, status: 'pending' as const } : task
+      );
+      rationale = `User overrode a wellbeing-driven point despite pushback — the specific contested task was restored. Original reasoning: ${swarm.verdict.rejectedOptions.map(r => r.reason).join(' ')}`;
+    } else if (outcome === 'conceded') {
+      rationale = `User contested a point but conceded to the enforcer's reasoning. The original verdict stands: ${swarm.verdict.chosenOption}`;
+    } else {
+      rationale = swarm.verdict.rejectedOptions.map(r => r.reason).join(' ');
+    }
+
+    const fd = buildFinalDecision({
+      decision: swarm.verdict.chosenOption,
+      taskList: finalTaskList,
+      confidence: outcome === 'conceded' ? 0.7 : 0.5,
+      rationale,
+    });
+    setFinalDecision(fd);
+
+    const source = outcome === 'conceded' ? 'override_concede' : 'override_anyway';
+    const trace = buildReasoningTrace(swarm, true, source);
+    console.log('[ReasoningTrace]', trace);
   }, [overrideModal]);
 
   const handleOverrideClose = useCallback(() => {
@@ -124,7 +180,7 @@ export default function App() {
               updatedTasks={swarmResult.verdict.updatedTaskList}
             />
 
-            <AssistantPanel finalTaskList={swarmResult.verdict.updatedTaskList} />
+            {finalDecision && <AssistantPanel finalDecision={finalDecision} />}
           </>
         )}
       </div>
@@ -132,6 +188,7 @@ export default function App() {
       <OverrideModal
         isOpen={overrideModal !== null}
         overriddenPoint={overrideModal?.point ?? ''}
+        overriddenTaskId={overrideModal?.taskId ?? ''}
         relevantAgentKey={overrideModal?.agentKey ?? 'wellbeing'}
         onSubmitReason={handleOverrideSubmit}
         onClose={handleOverrideClose}

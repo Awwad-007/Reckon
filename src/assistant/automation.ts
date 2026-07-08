@@ -1,6 +1,9 @@
-import type { Task } from '../agents/fallbackData';
-
-export interface TimedTask extends Task {
+export interface TimedTask {
+  id: string;
+  title: string;
+  estTimeMin: number;
+  urgency: 'low' | 'med' | 'high';
+  status: 'pending' | 'done' | 'bumped';
   start: Date;
   end: Date;
 }
@@ -11,9 +14,9 @@ export interface Reminder {
   message: string;
 }
 
-export function buildTimeline(updatedTaskList: Task[]): TimedTask[] {
+export function buildTimeline(taskList: TimedTask[]): TimedTask[] {
   const order = { high: 0, med: 1, low: 2 };
-  const active = updatedTaskList
+  const active = taskList
     .filter(t => t.status !== 'bumped')
     .sort((a, b) => order[a.urgency] - order[b.urgency]);
 

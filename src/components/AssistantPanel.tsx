@@ -1,17 +1,40 @@
 import { useState } from 'react';
 import { buildTimeline, generateReminder, fireBrowserNotification, generateICS, downloadICS, type TimedTask } from '../assistant/automation';
 import { getPersonalizationNote } from '../assistant/personalization';
-import type { Task } from '../agents/fallbackData';
 
-interface Props {
-  finalTaskList: Task[];
+interface FinalDecision {
+  decision: string;
+  taskList: TaskItem[];
+  confidence: number;
+  rationale: string;
 }
 
-export default function AssistantPanel({ finalTaskList }: Props) {
+interface TaskItem {
+  id: string;
+  title: string;
+  estTimeMin: number;
+  urgency: 'low' | 'med' | 'high';
+  status: 'pending' | 'done' | 'bumped';
+}
+
+interface Props {
+  finalDecision: FinalDecision;
+}
+
+export default function AssistantPanel({ finalDecision }: Props) {
   const [timeline, setTimeline] = useState<TimedTask[] | null>(null);
 
   const handleActivate = () => {
-    const built = buildTimeline(finalTaskList);
+    const tasks: TimedTask[] = finalDecision.taskList.map(t => ({
+      id: t.id,
+      title: t.title,
+      estTimeMin: t.estTimeMin,
+      urgency: t.urgency,
+      status: t.status,
+      start: new Date(),
+      end: new Date(),
+    }));
+    const built = buildTimeline(tasks);
     setTimeline(built);
     const reminder = generateReminder(built);
     fireBrowserNotification(reminder);
