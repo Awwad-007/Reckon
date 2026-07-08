@@ -3,19 +3,23 @@ import { useState } from 'react';
 interface Props {
   isOpen: boolean;
   overriddenPoint: string;
+  relevantAgentKey: string;
   onSubmitReason: (reason: string) => void;
   onClose: () => void;
   enforcerResponse: string | null;
   isLoading: boolean;
+  onOverrideOutcome?: (outcome: 'conceded' | 'overrode_anyway') => void;
 }
 
 export default function OverrideModal({
   isOpen,
   overriddenPoint,
+  relevantAgentKey,
   onSubmitReason,
   onClose,
   enforcerResponse,
   isLoading,
+  onOverrideOutcome,
 }: Props) {
   const [reason, setReason] = useState('');
 
@@ -71,14 +75,14 @@ export default function OverrideModal({
             </p>
             <div className="flex gap-3">
               <button
-                onClick={onClose}
+                onClick={() => { onOverrideOutcome?.('conceded'); onClose(); }}
                 className="font-mono-label text-xs tracking-widest uppercase
                            bg-[#F5F3EE] text-[#14151A] px-5 py-2.5 hover:bg-[#5FA8A0] transition-colors"
               >
                 Concede
               </button>
               <button
-                onClick={onClose}
+                onClick={() => { onOverrideOutcome?.('overrode_anyway'); onClose(); }}
                 className="font-mono-label text-xs tracking-widest uppercase
                            text-[#6B6E7A] px-5 py-2.5 hover:text-[#F5F3EE] transition-colors"
               >

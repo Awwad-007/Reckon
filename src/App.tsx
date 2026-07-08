@@ -4,9 +4,11 @@ import AgentCard from './components/AgentCard';
 import VerdictCard from './components/VerdictCard';
 import TaskListDiff from './components/TaskListDiff';
 import OverrideModal from './components/OverrideModal';
+import AssistantPanel from './components/AssistantPanel';
 import { SEED_TASKS } from './agents/fallbackData';
 import { runSwarm, runEnforcer, type SwarmResult } from './agents/orchestrator';
 import type { Task } from './agents/fallbackData';
+import { recordOverrideOutcome } from './assistant/personalization';
 
 type OverrideState = {
   point: string;
@@ -52,6 +54,11 @@ export default function App() {
     } finally {
       setEnforcerLoading(false);
     }
+  }, [overrideModal]);
+
+  const handleOverrideOutcome = useCallback((outcome: 'conceded' | 'overrode_anyway') => {
+    if (!overrideModal) return;
+    recordOverrideOutcome({ relevantAgentKey: overrideModal.agentKey, outcome });
   }, [overrideModal]);
 
   const handleOverrideClose = useCallback(() => {
@@ -116,6 +123,8 @@ export default function App() {
               originalTasks={taskList}
               updatedTasks={swarmResult.verdict.updatedTaskList}
             />
+
+            <AssistantPanel finalTaskList={swarmResult.verdict.updatedTaskList} />
           </>
         )}
       </div>
@@ -123,11 +132,12 @@ export default function App() {
       <OverrideModal
         isOpen={overrideModal !== null}
         overriddenPoint={overrideModal?.point ?? ''}
-        
+        relevantAgentKey={overrideModal?.agentKey ?? 'wellbeing'}
         onSubmitReason={handleOverrideSubmit}
         onClose={handleOverrideClose}
         enforcerResponse={enforcerResponse}
         isLoading={enforcerLoading}
+        onOverrideOutcome={handleOverrideOutcome}
       />
     </div>
   );
