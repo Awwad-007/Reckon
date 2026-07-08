@@ -21,10 +21,24 @@ interface Props {
   finalDecision: FinalDecision;
 }
 
+const STAGES = [
+  'Optimizing today\'s schedule…',
+  'Reordering priorities…',
+  'Preparing reminder…',
+  'Building timeline…',
+  'Personalizing your plan…',
+  'Ready.',
+];
+
 export default function AssistantPanel({ finalDecision }: Props) {
   const [timeline, setTimeline] = useState<TimedTask[] | null>(null);
+  const [stageIndex, setStageIndex] = useState(-1);
+  const [completedStages, setCompletedStages] = useState<number[]>([]);
 
   const handleActivate = () => {
+    setStageIndex(0);
+    setCompletedStages([]);
+
     const tasks: TimedTask[] = finalDecision.taskList.map(t => ({
       id: t.id,
       title: t.title,
@@ -34,10 +48,25 @@ export default function AssistantPanel({ finalDecision }: Props) {
       start: new Date(),
       end: new Date(),
     }));
+
     const built = buildTimeline(tasks);
-    setTimeline(built);
     const reminder = generateReminder(built);
-    fireBrowserNotification(reminder);
+
+    const actions = [
+      () => {},
+      () => {},
+      () => fireBrowserNotification(reminder),
+      () => setTimeline(built),
+      () => {},
+    ];
+
+    STAGES.forEach((_, i) => {
+      setTimeout(() => {
+        if (actions[i]) actions[i]();
+        setCompletedStages(prev => [...prev, i]);
+        setStageIndex(i + 1);
+      }, i * 260);
+    });
   };
 
   const handleDownload = () => {
@@ -46,6 +75,8 @@ export default function AssistantPanel({ finalDecision }: Props) {
   };
 
   const note = getPersonalizationNote();
+  const isRunning = stageIndex >= 0 && stageIndex < STAGES.length;
+  const isDone = stageIndex >= STAGES.length;
 
   return (
     <div className="bg-[#1D1F26] border border-[#2A2D38] px-6 py-5 mt-8">
@@ -53,19 +84,41 @@ export default function AssistantPanel({ finalDecision }: Props) {
         Assistant — Execution Layer
       </p>
 
-      <p className="text-sm text-[#F5F3EE] italic mb-4">{note}</p>
-
-      {!timeline ? (
-        <button
-          onClick={handleActivate}
-          className="font-mono-label text-xs tracking-widest uppercase
-                     bg-[#5FA8A0] text-[#14151A] px-5 py-2.5 hover:bg-[#7BC3BA] transition-colors"
-        >
-          Execute Ruling
-        </button>
-      ) : (
+      {stageIndex === -1 && (
         <>
-          <div className="space-y-2 mb-4">
+          <p className="text-sm text-[#F5F3EE] italic mb-4">{note}</p>
+          <button
+            onClick={handleActivate}
+            className="font-mono-label text-xs tracking-widest uppercase
+                       bg-[#5FA8A0] text-[#14151A] px-5 py-2.5 hover:bg-[#7BC3BA] transition-colors"
+          >
+            Execute Ruling
+          </button>
+        </>
+      )}
+
+      {(isRunning || isDone) && (
+        <div className="space-y-1.5 mb-4">
+          {STAGES.map((label, i) => {
+            const done = completedStages.includes(i);
+            const active = i === stageIndex && !done;
+            return (
+              <div
+                key={label}
+                className={`text-sm font-mono-label flex items-center gap-2 transition-opacity duration-200
+                  ${done ? 'text-[#5FA8A0] opacity-100' : active ? 'text-[#F5F3EE] opacity-100' : 'text-[#6B6E7A] opacity-0'}`}
+              >
+                <span>{done ? '✓' : active ? '…' : ''}</span>
+                <span>{label}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {isDone && timeline && (
+        <>
+          <div className="space-y-2 mb-4 border-t border-[#2A2D38] pt-4">
             {timeline.map(t => (
               <div key={t.id} className="flex justify-between text-sm text-[#F5F3EE]">
                 <span>{t.title}</span>
