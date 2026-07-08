@@ -1,25 +1,34 @@
 // THIS IS THE ONLY FILE ALLOWED TO CALL AN LLM API.
-// PRE-EVENT: direct Anthropic API. ON-SITE: swap the inside of this function for OpenSwarm.
+// CURRENT BACKEND: Groq (OpenAI-compatible chat completions).
+// ON-SITE: swap the inside of this function for OpenSwarm.
 // The function signature must never change.
 
-const API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || '';
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
 export async function callAgent(systemPrompt: string, userMessage: string): Promise<string> {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
-      "x-api-key": API_KEY,
-      "anthropic-version": "2023-06-01",
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${GROQ_API_KEY}`,
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
+      model: GROQ_MODEL,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
       max_tokens: 1000,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
+      temperature: 0.8,
     }),
   });
+
+  if (!response.ok) {
+    throw new Error(`Groq API error: ${response.status} ${response.statusText}`);
+  }
+
   const data = await response.json();
-  const textBlock = data.content.find((block: { type: string; text: string }) => block.type === "text");
-  return textBlock ? textBlock.text : "";
+  const text = data?.choices?.[0]?.message?.content;
+  return text ?? '';
 }
