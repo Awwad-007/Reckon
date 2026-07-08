@@ -20,7 +20,7 @@ export async function callAgent(systemPrompt: string, userMessage: string): Prom
         { role: 'user', content: userMessage },
       ],
       max_tokens: 1000,
-      temperature: 0.8,
+      temperature: 0.9,
     }),
   });
 
