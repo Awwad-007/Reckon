@@ -116,6 +116,36 @@ export function generateICS(timeline: TimedTask[]): string {
   return `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Reckon//EN\n${events}\nEND:VCALENDAR`;
 }
 
+export function buildFocusSession(kept: TaskItem[]) {
+  const primary = kept.find(t => t.urgency === 'high') || kept[0];
+  if (!primary) return null;
+  return {
+    task: primary.title,
+    duration: primary.estTimeMin,
+    recommendations: ['Enable Do Not Disturb', 'Keep your phone out of reach', 'Take a 10 minute break afterwards'],
+  };
+}
+
+const SOCIAL_KEYWORDS = ['call', 'dinner', 'meeting', 'birthday', 'mom', 'dad', 'friend', 'lunch', 'coffee', 'drinks', 'party', 'family'];
+
+export function generateSuggestedMessage(deferred: TaskItem[], kept: TaskItem[]) {
+  const socialDeferred = deferred.filter(t =>
+    SOCIAL_KEYWORDS.some(kw => t.title.toLowerCase().includes(kw))
+  );
+  if (socialDeferred.length === 0) return null;
+
+  const task = socialDeferred[0];
+  const nextKept = kept[0];
+  const timeNote = nextKept
+    ? `I'm tied up with "${nextKept.title}" until around ${new Date(Date.now() + nextKept.estTimeMin * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
+    : "I've got a packed schedule today.";
+
+  return {
+    taskTitle: task.title,
+    message: `Hi — quick update: I won't be able to make "${task.title}" as originally planned. ${timeNote} Let me know if there's another time that works.`,
+  };
+}
+
 export function downloadICS(icsString: string, filename = 'reckon-schedule.ics'): void {
   const blob = new Blob([icsString], { type: 'text/calendar' });
   const url = URL.createObjectURL(blob);

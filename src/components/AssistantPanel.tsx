@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   buildTimeline, generateReminder, fireBrowserNotification,
   generateICS, downloadICS, analyzeChanges,
+  buildFocusSession, generateSuggestedMessage,
   type TimedTask, type TaskItem,
 } from '../assistant/automation';
 import { getPersonalizationNote } from '../assistant/personalization';
@@ -32,6 +33,7 @@ export default function AssistantPanel({ finalDecision }: Props) {
   const [stageIndex, setStageIndex] = useState(-1);
   const [completedStages, setCompletedStages] = useState<number[]>([]);
   const [copied, setCopied] = useState(false);
+  const [messageCopied, setMessageCopied] = useState(false);
 
   const handleActivate = () => {
     setStageIndex(0);
@@ -82,6 +84,9 @@ export default function AssistantPanel({ finalDecision }: Props) {
   const { changes, kept, deferred } = isDone && timeline
     ? analyzeChanges(finalDecision.originalTaskList, finalDecision.taskList)
     : { changes: [], kept: [], deferred: [] };
+
+  const focusSession = isDone && timeline ? buildFocusSession(kept) : null;
+  const suggestedMessage = isDone && timeline ? generateSuggestedMessage(deferred, kept) : null;
 
   const totalMinutes = kept.reduce((sum, t) => sum + t.estTimeMin, 0);
   const lastTask = timeline?.[timeline.length - 1];
@@ -214,6 +219,46 @@ export default function AssistantPanel({ finalDecision }: Props) {
               Download .ics
             </button>
           </div>
+
+          {focusSession && (
+            <div className="border-t border-[#2A2D38] pt-4 mb-5">
+              <p className="font-mono-label text-[11px] tracking-widest uppercase text-[#E8A33D] mb-3">
+                Focus Session
+              </p>
+              <div className="bg-[#14151A] border border-[#2A2D38] px-4 py-3 space-y-2">
+                <p className="text-sm text-[#F5F3EE] font-medium">{focusSession.task}</p>
+                <p className="text-sm text-[#6B6E7A]">{focusSession.duration} minutes</p>
+                <div className="pt-1 space-y-0.5">
+                  {focusSession.recommendations.map((r, i) => (
+                    <p key={i} className="text-xs text-[#6B6E7A]">• {r}</p>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {suggestedMessage && (
+            <div className="border-t border-[#2A2D38] pt-4 mb-5">
+              <p className="font-mono-label text-[11px] tracking-widest uppercase text-[#7C6FE0] mb-3">
+                Suggested Message
+              </p>
+              <div className="bg-[#14151A] border border-[#2A2D38] px-4 py-3 mb-3">
+                <p className="text-sm text-[#F5F3EE] whitespace-pre-wrap">{suggestedMessage.message}</p>
+              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(suggestedMessage.message);
+                  setMessageCopied(true);
+                  setTimeout(() => setMessageCopied(false), 1500);
+                }}
+                className="font-mono-label text-xs tracking-widest uppercase
+                           border border-[#7C6FE0] text-[#7C6FE0] px-4 py-2
+                           hover:bg-[#7C6FE0] hover:text-[#14151A] transition-colors"
+              >
+                {messageCopied ? 'Copied' : 'Copy Message'}
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
