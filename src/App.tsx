@@ -6,6 +6,7 @@ import TaskListDiff from './components/TaskListDiff';
 import OverrideModal from './components/OverrideModal';
 import AssistantPanel from './components/AssistantPanel';
 import { SEED_TASKS, FALLBACK_VERDICT } from './agents/fallbackData';
+import { extractTasks } from './agents/taskExtractor';
 import { runSwarm, runEnforcer, type SwarmResult } from './agents/orchestrator';
 import { buildFinalDecision, type FinalDecision } from './agents/finalDecision';
 import { buildReasoningTrace } from './agents/reasoningTrace';
@@ -19,8 +20,8 @@ type OverrideState = {
 };
 
 export default function App() {
-  const [taskList] = useState<Task[]>(SEED_TASKS);
-  const originalTaskList = taskList;
+  const [taskList, setTaskList] = useState<Task[]>(SEED_TASKS);
+  const originalTaskListRef = useRef<Task[]>(SEED_TASKS);
   const [swarmResult, setSwarmResult] = useState<SwarmResult | null>(null);
   const [finalDecision, setFinalDecision] = useState<FinalDecision | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -32,16 +33,16 @@ export default function App() {
   const buildDecision = (swarm: SwarmResult, overriddenTaskId?: string): FinalDecision => {
     const rationale = swarm.verdict.rejectedOptions.map(r => r.reason).join(' ');
     const confidence = swarm.verdict.rejectedOptions.length <= 1 ? 0.85 : 0.6;
-    let taskList = swarm.verdict.updatedTaskList;
+    let updatedList = swarm.verdict.updatedTaskList;
     if (overriddenTaskId) {
-      taskList = taskList.map(task =>
+      updatedList = updatedList.map(task =>
         task.id === overriddenTaskId ? { ...task, status: 'pending' as const } : task
       );
     }
     return buildFinalDecision({
       decision: swarm.verdict.chosenOption,
-      taskList,
-      originalTaskList,
+      taskList: updatedList,
+      originalTaskList: originalTaskListRef.current,
       confidence,
       rationale,
     });
@@ -52,7 +53,10 @@ export default function App() {
     setSwarmResult(null);
     setFinalDecision(null);
     try {
-      const result = await runSwarm(text, taskList);
+      const extracted = await extractTasks(text);
+      setTaskList(extracted);
+      originalTaskListRef.current = extracted;
+      const result = await runSwarm(text, extracted);
       swarmResultRef.current = result;
       setSwarmResult(result);
       const fd = buildDecision(result);
@@ -65,7 +69,7 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [taskList]);
+  }, []);
 
   const handleOverrideClick = useCallback(() => {
     if (!swarmResult) return;
@@ -109,7 +113,7 @@ export default function App() {
     const fd = buildFinalDecision({
       decision: swarm.verdict.chosenOption,
       taskList: finalTaskList,
-      originalTaskList,
+      originalTaskList: originalTaskListRef.current,
       confidence: outcome === 'conceded' ? 0.7 : 0.5,
       rationale,
     });
