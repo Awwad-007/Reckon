@@ -39,17 +39,27 @@ export function generateReminder(timeline: TimedTask[]): Reminder | null {
   };
 }
 
-export function fireBrowserNotification(reminder: Reminder | null): void {
+export function fireBrowserNotification(reminder: Reminder | null, onStatusChange?: (status: 'granted' | 'denied' | 'unsupported') => void): void {
   if (!reminder) return;
+
   if (!('Notification' in window)) {
-    console.warn('Browser notifications not supported.');
+    onStatusChange?.('unsupported');
     return;
   }
+
   if (Notification.permission === 'granted') {
     new Notification('Reckon', { body: reminder.message });
-  } else if (Notification.permission !== 'denied') {
+    onStatusChange?.('granted');
+  } else if (Notification.permission === 'denied') {
+    onStatusChange?.('denied');
+  } else {
     Notification.requestPermission().then(perm => {
-      if (perm === 'granted') new Notification('Reckon', { body: reminder.message });
+      if (perm === 'granted') {
+        new Notification('Reckon', { body: reminder.message });
+        onStatusChange?.('granted');
+      } else {
+        onStatusChange?.('denied');
+      }
     });
   }
 }
