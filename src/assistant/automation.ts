@@ -1,3 +1,43 @@
+export interface TaskItem {
+  id: string;
+  title: string;
+  estTimeMin: number;
+  urgency: 'low' | 'med' | 'high';
+  status: 'pending' | 'done' | 'bumped';
+}
+
+export function analyzeChanges(originalTasks: TaskItem[], finalTaskList: TaskItem[]) {
+  const changes: string[] = [];
+  const kept: TaskItem[] = [];
+  const deferred: TaskItem[] = [];
+
+  finalTaskList.forEach(task => {
+    const original = originalTasks.find(t => t.id === task.id);
+    if (!original) return;
+
+    if (task.status === 'bumped') {
+      deferred.push(task);
+      changes.push(`Deferred "${original.title}"`);
+    } else {
+      kept.push(task);
+      if (original.estTimeMin !== task.estTimeMin) {
+        changes.push(`Adjusted "${task.title}" from ${original.estTimeMin} to ${task.estTimeMin} minutes`);
+      }
+      if (original.title !== task.title) {
+        changes.push(`Modified "${original.title}" to "${task.title}"`);
+      }
+    }
+  });
+
+  const originalOrder = originalTasks.map(t => t.id);
+  const firstKept = kept[0];
+  if (firstKept && originalOrder.indexOf(firstKept.id) > 0) {
+    changes.push(`Moved "${firstKept.title}" to the first work block`);
+  }
+
+  return { changes, kept, deferred };
+}
+
 export interface TimedTask {
   id: string;
   title: string;
