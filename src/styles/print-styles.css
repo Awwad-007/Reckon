@@ -1,0 +1,40 @@
+/*
+  Print styles for Reckon's decision summary.
+
+  Usage:
+    1. Wrap the summary you want printed in a container with
+       id="decision-summary-print" (e.g. around VerdictCard + TaskChecklist
+       in App.tsx).
+    2. Import this file once, globally — e.g. in main.tsx:
+         import './styles/print-styles.css';
+    3. Trigger printing with a plain button: <button onClick={() => window.print()}>
+       No extra JS logic needed — the media query below does the rest.
+*/
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #decision-summary-print,
+  #decision-summary-print * {
+    visibility: visible;
+  }
+
+  #decision-summary-print {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    background: #fff;
+    color: #000;
+  }
+
+  /* Anything explicitly marked no-print stays hidden even inside the
+     summary container — e.g. Confirm buttons, Quick-Reschedule, tooltips. */
+  .no-print {
+    display: none !important;
+  }
+}

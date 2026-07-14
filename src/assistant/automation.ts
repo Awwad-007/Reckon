@@ -146,6 +146,17 @@ export function generateSuggestedMessage(deferred: TaskItem[], kept: TaskItem[])
   };
 }
 
+export interface DeadlineBadge {
+  label: string;
+  tone: 'high' | 'med' | 'low';
+}
+
+/** Badge shown next to high-urgency tasks in the checklist. */
+export function getDeadlineBadge(task: TaskItem): DeadlineBadge | null {
+  if (task.urgency !== 'high') return null;
+  return { label: 'Due Today', tone: 'high' };
+}
+
 export function downloadICS(icsString: string, filename = 'reckon-schedule.ics'): void {
   const blob = new Blob([icsString], { type: 'text/calendar' });
   const url = URL.createObjectURL(blob);
